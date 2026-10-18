@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lets Android Settings open KeyVault from the Autofill service screen -->
+<autofill-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.pasuyolabs.keyvault.MainActivity" />

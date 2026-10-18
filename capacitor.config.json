@@ -1,0 +1,8 @@
+{
+  "appId": "com.pasuyolabs.keyvault",
+  "appName": "KeyVault",
+  "webDir": "www",
+  "android": {
+    "webContentsDebuggingEnabled": false
+  }
+}

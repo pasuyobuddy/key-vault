@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' capacitor: https://localhost; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' blob: data:">
+<title>KeyVault</title>
+<style>
+:root{
+  --bg:#EEF2F1; --surface:#FFFFFF; --sunk:#E3E9E7; --ink:#14221F; --muted:#5A6B67; --line:#D3DCD9;
+  --brand:#0E7A62; --brand-ink:#FFFFFF; --brand-soft:#D7EEE7; --red:#C2372D; --amber:#A96800; --head:#F7DCC7; --head-ink:#5B2E10;
+  box-sizing:border-box;
+  padding-top:var(--safe-area-inset-top,env(safe-area-inset-top,0px)); padding-bottom:var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px));
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#0C1513; --surface:#15211E; --sunk:#0F1A17; --ink:#E9F1EE; --muted:#93A6A1; --line:#25352F;
+    --brand:#3DC9A2; --brand-ink:#04211A; --brand-soft:#173A31; --red:#FF7A6E; --amber:#F2B451; --head:#3A2617; --head-ink:#F7DCC7; }
+}
+*,*::before,*::after{box-sizing:inherit}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:Roboto,"Segoe UI",system-ui,-apple-system,sans-serif;
+  font-size:16px;line-height:1.4;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+.mono{font-family:"Roboto Mono",ui-monospace,Menlo,Consolas,monospace;letter-spacing:.3px}
+svg{flex:none}
+
+/* ---------- gate screens (setup / unlock / recovery code) ---------- */
+.gate{min-height:100%;display:flex;flex-direction:column;justify-content:center;max-width:420px;margin:0 auto;padding:32px 20px}
+.mark{width:64px;height:64px;border-radius:18px;background:var(--brand);color:var(--brand-ink);display:grid;place-items:center;margin-bottom:18px}
+.mark svg{width:34px;height:34px}
+.gate h1{font-size:28px;margin:0 0 6px;letter-spacing:-.5px}
+.gate p.sub{color:var(--muted);margin:0 0 22px}
+label{display:block;font-size:14px;font-weight:600;margin:14px 0 6px}
+label small{font-weight:400;color:var(--muted)}
+.field{position:relative}
+input[type=text],input[type=password],input[type=email],input[type=url],textarea,select{width:100%;background:var(--surface);border:1.5px solid var(--line);
+  border-radius:10px;padding:12px 14px;min-height:48px;outline:none}
+textarea{min-height:84px;resize:vertical}
+input:focus,textarea:focus,select:focus{border-color:var(--brand)}
+.field input{padding-right:52px}
+.field.two input{padding-right:96px}
+.eye{position:absolute;right:4px;top:4px;width:44px;height:40px;border:0;background:none;border-radius:8px;color:var(--muted);display:grid;place-items:center}
+.eye svg,.gen-inline svg{width:22px;height:22px}
+.gen-inline{position:absolute;right:48px;top:4px;width:44px;height:40px;border:0;background:none;color:var(--brand);border-radius:8px;display:grid;place-items:center}
+.meter{height:6px;border-radius:3px;background:var(--sunk);margin-top:8px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--red);transition:width .2s,background .2s}
+.hint{font-size:13px;color:var(--muted);margin-top:6px;min-height:18px}
+.warn{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border-left:4px solid var(--amber);border-radius:8px;
+  padding:12px;margin:18px 0 4px;font-size:14px;font-weight:400}
+.warn input{width:22px;height:22px;margin:0;flex:none;accent-color:var(--brand)}
+.err{color:var(--red);font-size:14px;min-height:20px;margin-top:8px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:50px;border-radius:12px;border:0;font-weight:700;font-size:16px;margin-top:14px}
+.btn svg{width:20px;height:20px}
+.btn.main{background:var(--brand);color:var(--brand-ink)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.quiet{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.btn.danger{background:transparent;color:var(--red);border:1.5px solid var(--red)}
+.link{background:none;border:0;color:var(--brand);font-weight:600;padding:12px 0;margin-top:4px;text-align:center;width:100%}
+.code{background:var(--surface);border:2px dashed var(--brand);border-radius:12px;padding:16px;font-size:20px;text-align:center;
+  font-weight:700;letter-spacing:1px;word-spacing:4px;margin:8px 0 4px;user-select:all}
+
+/* ---------- vault ---------- */
+.app{max-width:560px;margin:0 auto;padding:16px 16px 140px}
+body.ad .app{padding-bottom:200px}
+.top{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.top h1{font-size:22px;margin:0;flex:1;letter-spacing:-.3px}
+.top h1 small{display:block;font-size:13px;font-weight:500;color:var(--muted);letter-spacing:0}
+.icon{width:46px;height:46px;border-radius:12px;border:0;background:var(--surface);color:var(--ink);display:grid;place-items:center}
+.icon svg{width:22px;height:22px}
+.search{position:relative;margin-bottom:12px}
+.search input{padding-left:44px}
+.search svg{position:absolute;left:14px;top:14px;width:20px;height:20px;color:var(--muted)}
+
+/* groups of v1.0-style cards */
+.gname{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--muted);margin:18px 4px 8px;text-transform:uppercase;letter-spacing:.4px}
+.gname:first-child{margin-top:4px}
+.gname small{font-weight:500;text-transform:none;letter-spacing:0}
+.item{display:grid;grid-template-columns:40px minmax(0,1fr) 42px 42px 42px;gap:5px;align-items:center;background:var(--surface);
+  border-radius:12px;padding:8px 6px 8px 10px;margin-bottom:8px}
+.ava{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:18px;color:#fff}
+.who{background:none;border:0;text-align:left;padding:2px 4px;min-width:0;min-height:44px;display:grid;gap:1px}
+.who b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who span{color:var(--muted);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who .pw{font-size:14px;color:var(--ink);letter-spacing:.5px}
+.sq{width:42px;height:44px;border:0;border-radius:10px;background:var(--sunk);color:var(--ink);display:grid;place-items:center}
+.sq svg{width:20px;height:20px}
+.sq.pw{background:var(--brand-soft);color:var(--brand)}
+.sq.go{background:var(--brand);color:var(--brand-ink)}
+.chip{display:flex;align-items:center;gap:8px;background:var(--brand-soft);color:var(--ink);border-radius:10px;padding:6px 6px 6px 10px;margin-top:8px;font-size:14px}
+.chip img{width:24px;height:24px;border-radius:6px}
+.chip span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip button{width:36px;height:36px;border:0;background:none;border-radius:8px;font-size:16px;color:var(--muted)}
+.pick{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:44px;margin-top:8px;border-radius:10px;
+  border:1.5px dashed var(--brand);background:transparent;color:var(--brand);font-weight:700;font-size:15px}
+.pick svg{width:20px;height:20px}
+.apps{list-style:none;margin:10px 0 0;padding:0;max-height:52vh;overflow:auto}
+.apps li button{display:flex;align-items:center;gap:12px;width:100%;background:var(--surface);border:0;border-radius:10px;
+  padding:8px 10px;margin-bottom:6px;text-align:left;min-height:52px}
+.apps img{width:36px;height:36px;border-radius:9px;flex:none}
+.apps .noimg{width:36px;height:36px;border-radius:9px;background:var(--sunk);flex:none}
+.apps span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tip{background:var(--surface);border-left:4px solid var(--brand);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.tip b{display:block;margin-bottom:2px}
+.tip p{margin:0;color:var(--muted);font-size:14px}
+.tip .row{display:flex;gap:8px;margin-top:10px}
+.tip .row .btn{margin:0;min-height:42px;font-size:15px}
+.empty{text-align:center;color:var(--muted);padding:48px 16px;background:var(--surface);border-radius:14px}
+.empty b{display:block;color:var(--ink);font-size:18px;margin-bottom:6px}
+.tools{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
+.tools button{min-height:64px;border:0;border-radius:12px;font-weight:700;font-size:14px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:4px;padding:8px 4px;color:var(--ink)}
+.tools svg{width:22px;height:22px}
+#tDown{background:#BFD4F2}#tDrive{background:#F7DCC7}#tImport{background:#D6EEF4}
+@media (prefers-color-scheme:dark){#tDown{background:#1E3352}#tDrive{background:#3A2617}#tImport{background:#173A44}}
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)));
+  width:calc(100% - 32px);max-width:528px;z-index:5}
+body.ad .fab{bottom:calc(76px + var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))}
+.fab .btn{margin:0;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+
+/* ---------- sheets ---------- */
+.veil{position:fixed;inset:0;background:rgba(5,14,12,.55);display:none;align-items:flex-end;justify-content:center;z-index:20}
+.veil.on{display:flex}
+.sheet{background:var(--bg);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;
+  padding:20px 16px calc(20px + var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))}
+.sheet h3{margin:0 0 4px;font-size:20px}
+.sheet .row{display:flex;gap:10px}
+.sheet .row .btn{flex:1}
+.kv{background:var(--surface);border-radius:12px;padding:4px 14px;margin-top:12px}
+.kv>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.kv>div:last-child{border-bottom:0}
+.kv small{display:block;color:var(--muted);font-size:13px}
+.kv .v{word-break:break-all}
+.kv .acts{display:flex;gap:6px}
+.gen{background:var(--surface);border-radius:12px;padding:16px;margin-top:12px;font-size:20px;word-break:break-all;min-height:62px}
+.opt{display:flex;justify-content:space-between;align-items:center;padding:10px 2px;border-bottom:1px solid var(--line)}
+.opt input[type=checkbox]{width:24px;height:24px;accent-color:var(--brand)}
+input[type=range]{width:100%;accent-color:var(--brand)}
+.menu button.mi{display:flex;justify-content:space-between;align-items:center;width:100%;background:var(--surface);border:0;
+  border-radius:12px;padding:14px;margin-top:8px;text-align:left;min-height:52px}
+.menu button.mi small{color:var(--muted)}
+.menu .red{color:var(--red)}
+.credit{text-align:center;color:var(--muted);font-size:13px;margin-top:18px}
+.credit a{color:var(--muted)}
+
+.toast{position:fixed;left:50%;top:calc(14px + var(--safe-area-inset-top,env(safe-area-inset-top,0px)));transform:translateX(-50%);
+  background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:24px;font-size:15px;z-index:40;width:max-content;max-width:calc(100% - 32px);
+  opacity:0;pointer-events:none;transition:opacity .2s;text-align:center}
+.toast.on{opacity:1}
+.busy{position:fixed;inset:0;background:rgba(5,14,12,.35);display:none;place-items:center;z-index:50;color:#fff;font-weight:600}
+.busy.on{display:grid}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ============ first run: create master password ============ -->
+<section class="gate" id="setupView" hidden>
+  <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.6" fill="currentColor"/></svg></div>
+  <h1>Welcome to KeyVault</h1>
+  <p class="sub">Create one master password. It locks the app and encrypts every password you save.</p>
+  <label for="sPw">Master password</label>
+  <div class="field"><input type="password" id="sPw" autocomplete="new-password" autocapitalize="off" spellcheck="false">
+    <button class="eye" type="button" data-eye="sPw" aria-label="Show password"></button></div>
+  <div class="meter" aria-hidden="true"><i id="sMeter"></i></div>
+  <div class="hint" id="sHint">At least 8 characters. Longer is stronger.</div>
+  <label for="sPw2">Type it again</label>
+  <div class="field"><input type="password" id="sPw2" autocomplete="new-password" autocapitalize="off" spellcheck="false">
+    <button class="eye" type="button" data-eye="sPw2" aria-label="Show password"></button></div>
+  <div class="err" id="sErr" role="alert"></div>
+  <button class="btn main" id="sGo">Create my vault</button>
+  <button class="link" id="sImport">New phone? Import keys from a backup file</button>
+</section>
+
+<!-- ============ recovery code (shown after setup) ============ -->
+<section class="gate" id="recView" hidden>
+  <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9.2-9.2M17 6l3 3M14 9l2 2"/></svg></div>
+  <h1>Your recovery code</h1>
+  <p class="sub">If you ever forget your master password, this code opens your vault so you can set a new one. Write it on paper or save it somewhere safe outside this phone.</p>
+  <div class="code mono" id="recCode"></div>
+  <button class="btn quiet" id="recCopy">Copy code</button>
+  <label class="warn" for="recOk"><input type="checkbox" id="recOk">
+    <span><b>I saved my recovery code.</b> Without it, a forgotten master password cannot be reset.</span></label>
+  <div class="err" id="recErr" role="alert"></div>
+  <button class="btn main" id="recGo">Continue</button>
+</section>
+
+<!-- ============ unlock ============ -->
+<section class="gate" id="lockView" hidden>
+  <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.6" fill="currentColor"/></svg></div>
+  <h1>KeyVault is locked</h1>
+  <p class="sub">Enter your master password to open your vault.</p>
+  <label for="uPw">Master password</label>
+  <div class="field"><input type="password" id="uPw" autocomplete="current-password" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+    <button class="eye" type="button" data-eye="uPw" aria-label="Show password"></button></div>
+  <div class="err" id="uErr" role="alert"></div>
+  <button class="btn main" id="uGo">Unlock</button>
+  <button class="btn quiet" id="uBio" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11v3a8 8 0 0 1-1.5 4.7M8.5 7.6A5 5 0 0 1 17 11v1.5M7 11a5 5 0 0 1 .3-1.7M5 6.3A9 9 0 0 1 21 11v1M3 12a9 9 0 0 1 .6-3.2M16.9 15.5a12 12 0 0 1-1 4M7.5 14.5a12 12 0 0 1-1.6 4.3"/></svg>Unlock with fingerprint</button>
+  <button class="link" id="uForgot">Forgot master password?</button>
+</section>
+
+<!-- ============ vault ============ -->
+<div class="app" id="vaultView" hidden>
+  <header class="top">
+    <h1>KeyVault<small id="count"></small></h1>
+    <button class="icon" id="lockBtn" aria-label="Lock now"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button>
+    <button class="icon" id="menuBtn" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  </header>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input type="text" id="q" placeholder="Search platform, email, username" aria-label="Search" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+  <div class="tip" id="afTip" hidden>
+    <b>Fill passwords in other apps</b>
+    <p>Turn on Autofill and KeyVault fills your email and password in Facebook, Shopee, banks and more &mdash; no copy and paste.</p>
+    <div class="row"><button class="btn quiet" id="afLater">Not now</button><button class="btn main" id="afOn">Turn on</button></div>
+  </div>
+  <div id="list"></div>
+  <div class="empty" id="empty" hidden></div>
+  <div class="tools">
+    <button id="tDown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Download</button>
+    <button id="tDrive"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a5 5 0 0 1-.6-9.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9"/><path d="M12 12v8M9 15l3-3 3 3"/></svg>Upload to Drive</button>
+    <button id="tImport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9M7 14l5-5 5 5M5 3h14"/></svg>Import keys</button>
+  </div>
+  <div class="fab"><button class="btn main" id="addBtn">Add password</button></div>
+</div>
+<input type="file" id="fileIn" hidden>
+
+<!-- ============ view one entry ============ -->
+<div class="veil" id="viewVeil">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="vSite">
+    <h3 id="vSite"></h3>
+    <div class="kv">
+      <div><span><small>Email address</small><span class="v" id="vEmail"></span></span>
+        <span class="acts"><button class="sq" id="vCopyEmail" aria-label="Copy email"></button></span></div>
+      <div><span><small>Username</small><span class="v" id="vUser"></span></span>
+        <span class="acts"><button class="sq" id="vCopyUser" aria-label="Copy username"></button></span></div>
+      <div><span><small>Password</small><span class="v mono" id="vPass"></span></span>
+        <span class="acts"><button class="sq" id="vShow" aria-label="Show password"></button><button class="sq pw" id="vCopyPass" aria-label="Copy password"></button></span></div>
+      <div id="vUrlRow"><span><small>Website</small><span class="v" id="vUrl"></span></span><span></span></div>
+      <div id="vNoteRow"><span><small>Notes</small><span class="v" id="vNote" style="white-space:pre-wrap"></span></span><span></span></div>
+      <div><span><small>Record date</small><span class="v" id="vWhen"></span></span><span></span></div>
+    </div>
+    <button class="btn main" id="vOpen"></button>
+    <div class="row"><button class="btn quiet" id="vClose">Close</button><button class="btn quiet" id="vEdit">Edit</button></div>
+  </div>
+</div>
+
+<!-- ============ add / edit entry ============ -->
+<div class="veil" id="formVeil">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="fTitle">
+    <h3 id="fTitle">Add password</h3>
+    <label for="fSite">Platform</label>
+    <input type="text" id="fSite" list="platList" maxlength="60" placeholder="Gmail, Facebook, GCash&hellip;" autocomplete="off">
+    <datalist id="platList"></datalist>
+    <button type="button" class="pick" id="fPick" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg>Choose from my apps</button>
+    <div class="chip" id="fChip" hidden><img id="fChipIcon" alt=""><span id="fChipTxt"></span><button type="button" id="fChipX" aria-label="Unlink this app">&#10005;</button></div>
+    <label for="fEmail">Email address</label>
+    <input type="email" id="fEmail" maxlength="200" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="email">
+    <label for="fUser">Username <small>(if any)</small></label>
+    <input type="text" id="fUser" maxlength="200" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <label for="fPass">Password</label>
+    <div class="field two"><input type="password" id="fPass" class="mono" maxlength="500" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <button class="gen-inline" type="button" id="fGen" aria-label="Generate a strong password"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+      <button class="eye" type="button" data-eye="fPass" aria-label="Show password"></button></div>
+    <label for="fUrl">Website <small>(optional &mdash; Open uses it when the app isn&rsquo;t on the phone)</small></label>
+    <input type="url" id="fUrl" maxlength="300" placeholder="example.com" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <label for="fNote">Notes <small>(optional)</small></label>
+    <textarea id="fNote" maxlength="2000" placeholder="Security questions, PIN hint, recovery codes&hellip;"></textarea>
+    <div class="err" id="fErr" role="alert"></div>
+    <div class="row"><button class="btn quiet" id="fCancel">Cancel</button><button class="btn main" id="fSave">Save</button></div>
+    <button class="btn danger" id="fDelete" hidden>Delete this password</button>
+  </div>
+</div>
+
+<!-- ============ password generator ============ -->
+<div class="veil" id="genVeil">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="gTitle">
+    <h3 id="gTitle">Strong password</h3>
+    <div class="gen mono" id="gOut" aria-live="polite"></div>
+    <label for="gLen">Length: <span id="gLenTxt">16</span></label>
+    <input type="range" id="gLen" min="8" max="40" value="16">
+    <div class="opt"><span>Capital letters (A&ndash;Z)</span><input type="checkbox" id="gUp" checked aria-label="Capital letters"></div>
+    <div class="opt"><span>Small letters (a&ndash;z)</span><input type="checkbox" id="gLo" checked aria-label="Small letters"></div>
+    <div class="opt"><span>Numbers (0&ndash;9)</span><input type="checkbox" id="gNum" checked aria-label="Numbers"></div>
+    <div class="opt"><span>Symbols (!@#&hellip;)</span><input type="checkbox" id="gSym" checked aria-label="Symbols"></div>
+    <div class="row"><button class="btn quiet" id="gNew">New one</button><button class="btn main" id="gUse">Use this</button></div>
+    <button class="btn quiet" id="gClose">Close</button>
+  </div>
+</div>
+
+<!-- ============ settings ============ -->
+<div class="veil" id="menuVeil">
+  <div class="sheet menu" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <h3 id="mTitle">Settings</h3>
+    <label for="mLock">Lock the app when I leave it for</label>
+    <select id="mLock">
+      <option value="0">Lock right away</option>
+      <option value="30">30 seconds</option>
+      <option value="60">1 minute</option>
+      <option value="300">5 minutes</option>
+    </select>
+    <button class="mi" id="mBio" hidden>Unlock with fingerprint <small id="mBioState">Off</small></button>
+    <button class="mi" id="mAf" hidden>Autofill in other apps <small id="mAfState">Off</small></button>
+    <button class="mi" id="mGen">Password generator <small>Make a strong one</small></button>
+    <button class="mi" id="mChange">Change master password <small>&rsaquo;</small></button>
+    <button class="mi" id="mRec">Show recovery code <small>&rsaquo;</small></button>
+    <button class="mi red" id="mWipe">Delete all data <small>&rsaquo;</small></button>
+    <button class="btn quiet" id="mClose">Close</button>
+    <p class="credit">Made by PasuyoLabs<span id="ver"> &middot; v__APP_VERSION__</span><br>
+      <a href="https://pasuyobuddy.github.io/keyvault-privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>
+  </div>
+</div>
+
+<!-- ============ change master password ============ -->
+<div class="veil" id="chgVeil">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cTitle">
+    <h3 id="cTitle">Change master password</h3>
+    <label for="cOld">Current master password</label>
+    <div class="field"><input type="password" id="cOld" autocomplete="current-password" autocapitalize="off" spellcheck="false">
+      <button class="eye" type="button" data-eye="cOld" aria-label="Show password"></button></div>
+    <label for="cNew">New master password</label>
+    <div class="field"><input type="password" id="cNew" autocomplete="new-password" autocapitalize="off" spellcheck="false">
+      <button class="eye" type="button" data-eye="cNew" aria-label="Show password"></button></div>
+    <div class="meter" aria-hidden="true"><i id="cMeter"></i></div>
+    <label for="cNew2">Type the new one again</label>
+    <div class="field"><input type="password" id="cNew2" autocomplete="new-password" autocapitalize="off" spellcheck="false">
+      <button class="eye" type="button" data-eye="cNew2" aria-label="Show password"></button></div>
+    <div class="err" id="cErr" role="alert"></div>
+    <div class="row"><button class="btn quiet" id="cCancel">Cancel</button><button class="btn main" id="cGo">Change</button></div>
+  </div>
+</div>
+
+<!-- ============ forgot master password ============ -->
+<div class="veil" id="fgVeil">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="fgTitle">
+    <h3 id="fgTitle">Forgot master password</h3>
+    <p class="hint" style="font-size:15px">Type the recovery code you saved when you created your vault, then choose a new master password.</p>
+    <label for="fgCode">Recovery code</label>
+    <input type="text" id="fgCode" class="mono" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <label for="fgNew">New master password</label>
+    <div class="field"><input type="password" id="fgNew" autocomplete="new-password" autocapitalize="off" spellcheck="false">
+      <button class="eye" type="button" data-eye="fgNew" aria-label="Show password"></button></div>
+    <div class="meter" aria-hidden="true"><i id="fgMeter"></i></div>
+    <label for="fgNew2">Type the new one again</label>
+    <div class="field"><input type="password" id="fgNew2" autocomplete="new-password" autocapitalize="off" spellcheck="false">
+      <button class="eye" type="button" data-eye="fgNew2" aria-label="Show password"></button></div>
+    <div class="err" id="fgErr" role="alert"></div>
+    <div class="row"><button class="btn quiet" id="fgCancel">Cancel</button><button class="btn main" id="fgGo">Reset password</button></div>
+  </div>
+</div>
+
+<!-- ============ ask master password (show recovery code / import file) ============ -->
+<div class="veil" id="pwVeil">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pTitle">
+    <h3 id="pTitle"></h3>
+    <p class="hint" id="pInfo" style="font-size:15px"></p>
+    <label for="pPw" id="pLabel">Master password</label>
+    <div class="field"><input type="password" id="pPw" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+      <button class="eye" type="button" data-eye="pPw" aria-label="Show password"></button></div>
+    <div class="err" id="pErr" role="alert"></div>
+    <div class="row"><button class="btn quiet" id="pCancel">Cancel</button><button class="btn main" id="pGo">OK</button></div>
+  </div>
+</div>
+
+<!-- ============ show recovery code (from settings) ============ -->
+<div class="veil" id="rcVeil">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rcTitle">
+    <h3 id="rcTitle">Recovery code</h3>
+    <p class="hint" style="font-size:15px">Keep it outside this phone. Anyone with this code and your phone can open your vault.</p>
+    <div class="code mono" id="rcCode"></div>
+    <div class="row"><button class="btn quiet" id="rcClose">Close</button><button class="btn main" id="rcCopy">Copy</button></div>
+  </div>
+</div>
+
+<!-- ============ choose an installed app ============ -->
+<div class="veil" id="appsVeil">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="apTitle">
+    <h3 id="apTitle">Choose the app</h3>
+    <input type="text" id="appsQ" placeholder="Search your apps" aria-label="Search your apps" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <ul class="apps" id="appsList"></ul>
+    <p class="hint" id="appsHint">Not on this phone? Close this, type the name in Platform and add the website.</p>
+    <button class="btn quiet" id="appsClose">Close</button>
+  </div>
+</div>
+
+<!-- ============ Open: nothing to open ============ -->
+<div class="veil" id="cantVeil">
+  <div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="ctTitle">
+    <h3 id="ctTitle"></h3>
+    <p class="hint" id="ctText" style="font-size:15px"></p>
+    <button class="btn main" id="ctStore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Install from Play Store</button>
+    <button class="btn quiet" id="ctWeb">Add website</button>
+    <button class="btn quiet" id="ctNo">Cancel</button>
+  </div>
+</div>
+
+<!-- ============ confirm ============ -->
+<div class="veil" id="askVeil">
+  <div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="aTitle">
+    <h3 id="aTitle"></h3>
+    <p class="hint" id="aText" style="font-size:15px"></p>
+    <div class="row"><button class="btn quiet" id="aNo">Cancel</button><button class="btn danger" id="aYes">Delete</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="busy" id="busy">Working&hellip;</div>
+
+<script>
+(function(){
+'use strict';
+var VKEY='keyvault.vault.v2', OLDKEY='keyvault.vault.v1', SKEY='keyvault.settings.v1', FKEY='keyvault.fails.v1';
+var ITER=600000;               // PBKDF2-SHA256 rounds for the master password
+var RITER=200000;              // rounds for the 120-bit recovery code
+var CLIP_CLEAR_SEC=30;         // copied passwords are wiped from the clipboard after this
+var IDLE_LOCK_SEC=300;         // lock after 5 minutes without touching the screen
+var MAX_TRIES=5, WAIT_SEC=30;  // after 5 wrong tries: wait 30 s (never locked for good)
+var REVEAL_SEC=15;             // a shown password hides itself again after this
+var APP_VERSION='__APP_VERSION__';
+var $=function(id){return document.getElementById(id)};
+var enc=new TextEncoder(), dec=new TextDecoder();
+
+/* ---------- icons ---------- */
+var IC={
+  copy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>',
+  eye:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  eyeOff:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.2M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>',
+  open:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>'
+};
+var MASK='•••••••••';
+
+/* ---------- known platforms: Android app (package) + website, for the Open button ---------- */
+function norm(s){return String(s||'').trim().toLowerCase().replace(/\s+/g,' ')}
+var PLATFORMS=[
+  ['Gmail','com.google.android.gm','https://mail.google.com'],
+  ['Facebook','com.facebook.katana','https://www.facebook.com'],
+  ['Messenger','com.facebook.orca','https://www.messenger.com'],
+  ['Instagram','com.instagram.android','https://www.instagram.com'],
+  ['TikTok','com.zhiliaoapp.musically','https://www.tiktok.com'],
+  ['X (Twitter)','com.twitter.android','https://x.com'],
+  ['YouTube','com.google.android.youtube','https://www.youtube.com'],
+  ['WhatsApp','com.whatsapp','https://web.whatsapp.com'],
+  ['Telegram','org.telegram.messenger','https://web.telegram.org'],
+  ['Viber','com.viber.voip','https://www.viber.com'],
+  ['Snapchat','com.snapchat.android','https://www.snapchat.com'],
+  ['LinkedIn','com.linkedin.android','https://www.linkedin.com'],
+  ['Outlook','com.microsoft.office.outlook','https://outlook.live.com'],
+  ['Yahoo Mail','com.yahoo.mobile.client.android.mail','https://mail.yahoo.com'],
+  ['GCash','com.globe.gcash.android','https://www.gcash.com'],
+  ['Maya','com.paymaya','https://www.maya.ph'],
+  ['PayPal','com.paypal.android.p2pmobile','https://www.paypal.com'],
+  ['Lazada','com.lazada.android','https://www.lazada.com.ph'],
+  ['Shopee','','https://shopee.ph'],
+  ['Amazon','com.amazon.mShop.android.shopping','https://www.amazon.ae'],
+  ['Netflix','com.netflix.mediaclient','https://www.netflix.com'],
+  ['Spotify','com.spotify.music','https://open.spotify.com'],
+  ['Discord','com.discord','https://discord.com/app'],
+  ['GitHub','com.github.android','https://github.com/login'],
+  ['Supabase','','https://supabase.com/dashboard'],
+  ['Google Play Console','','https://play.google.com/console'],
+  ['AdMob','','https://admob.google.com'],
+  ['Codemagic','','https://codemagic.io/apps'],
+  ['MetaTrader 5','net.metaquotes.metatrader5','https://www.metatrader5.com'],
+  ['TradingView','com.tradingview.tradingviewapp','https://www.tradingview.com'],
+  ['Microsoft','com.microsoft.office.outlook','https://login.live.com'],
+  ['Apple ID','','https://account.apple.com'],
+  ['Steam','com.valvesoftware.android.steam.community','https://store.steampowered.com/login']
+];
+var PMAP={};PLATFORMS.forEach(function(p){PMAP[norm(p[0])]=p});
+[['google','gmail'],['twitter','x (twitter)'],['x','x (twitter)'],['fb','facebook'],['hotmail','outlook'],['ig','instagram'],
+ ['mt5','metatrader 5'],['yahoo','yahoo mail']].forEach(function(a){PMAP[a[0]]=PMAP[a[1]]});
+
+/* ---------- storage ---------- */
+var mem={};
+function load(k,def){try{var v=localStorage.getItem(k);return v==null?def:JSON.parse(v)}catch(e){return k in mem?mem[k]:def}}
+function save(k,v){mem[k]=v;try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function drop(k){delete mem[k];try{localStorage.removeItem(k)}catch(e){}}
+var settings=load(SKEY,{lockAfter:60});
+
+/* ---------- encryption ----------
+   A random 256-bit vault key (DEK) encrypts the data with AES-256-GCM.
+   The DEK is stored twice, each copy encrypted with a key made by PBKDF2-SHA256 from:
+     (1) the master password, (2) the recovery code.
+   So either one opens the vault, and "Forgot password" can set a new master password. */
+function b64(u8){var s='';for(var i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)}
+function unb64(s){var b=atob(s),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
+function rand(n){var u=new Uint8Array(n);crypto.getRandomValues(u);return u}
+function kdf(secret,salt,iter){
+  return crypto.subtle.importKey('raw',enc.encode(secret),'PBKDF2',false,['deriveKey']).then(function(base){
+    return crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:iter,hash:'SHA-256'},base,
+      {name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+  });
+}
+function aesKey(raw){return crypto.subtle.importKey('raw',raw,'AES-GCM',false,['encrypt','decrypt'])}
+function seal(key,u8){var iv=rand(12);return crypto.subtle.encrypt({name:'AES-GCM',iv:iv},key,u8).then(function(ct){return {iv:b64(iv),ct:b64(new Uint8Array(ct))}})}
+function unseal(key,box){return crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(box.iv)},key,unb64(box.ct)).then(function(b){return new Uint8Array(b)})}
+function isBox(b){return b&&typeof b.iv==='string'&&typeof b.ct==='string'}
+function validRecord(r){return !!(r&&r.v===2&&typeof r.salt==='string'&&typeof r.rsalt==='string'&&isBox(r.pw)&&isBox(r.rec)&&isBox(r.data)&&
+  r.iter>=100000&&r.iter<=5000000&&r.riter>=100000&&r.riter<=5000000)}
+function validV1(r){return !!(r&&r.v===1&&typeof r.salt==='string'&&typeof r.iv==='string'&&typeof r.ct==='string'&&r.iter>=100000&&r.iter<=5000000)}
+
+var RC='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 32 symbols, no 0/O/1/I to avoid mix-ups
+function makeRecovery(){var u=rand(24),s='';for(var i=0;i<24;i++){s+=RC[u[i]&31];if(i%4===3&&i<23)s+='-'}return s}
+function normRecovery(s){return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'')}
+
+/* opens a record with the master password (how='pw') or recovery code (how='rec') */
+function openWith(rec,secret,how){
+  var p=how==='rec'?kdf(normRecovery(secret),unb64(rec.rsalt),rec.riter):kdf(secret,unb64(rec.salt),rec.iter);
+  return p.then(function(kek){return unseal(kek,how==='rec'?rec.rec:rec.pw)}).then(function(dek){return openWithDek(rec,dek)});
+}
+/* opens a record with the vault key itself (fingerprint unlock) */
+function openWithDek(rec,dek){
+  return aesKey(dek).then(function(dkey){
+    return unseal(dkey,rec.data).then(function(pt){
+      var data=JSON.parse(dec.decode(pt));fixData(data);
+      var meta={};Object.keys(rec).forEach(function(k){if(k!=='data')meta[k]=rec[k]});
+      return {dek:dek,dkey:dkey,meta:meta,data:data};
+    });
+  });
+}
+/* builds a brand-new session (new vault key + new recovery code) for these entries */
+function newSession(pw,entries){
+  var dek=rand(32),code=makeRecovery(),salt=rand(16),rsalt=rand(16),meta={v:2,app:'KeyVault',iter:ITER,salt:b64(salt),riter:RITER,rsalt:b64(rsalt)};
+  return Promise.all([kdf(pw,salt,ITER),kdf(normRecovery(code),rsalt,RITER),aesKey(dek)]).then(function(k){
+    return Promise.all([seal(k[0],dek),seal(k[1],dek)]).then(function(b){
+      meta.pw=b[0];meta.rec=b[1];
+      return {dek:dek,dkey:k[2],meta:meta,data:{entries:entries||[],recovery:code,created:Date.now()}};
+    });
+  });
+}
+function setMasterPassword(sess,pw){
+  var salt=rand(16);
+  return kdf(pw,salt,ITER).then(function(kek){return seal(kek,sess.dek)}).then(function(box){
+    sess.meta.salt=b64(salt);sess.meta.iter=ITER;sess.meta.pw=box;
+  });
+}
+function openV1(rec,pw){
+  return kdf(pw,unb64(rec.salt),rec.iter).then(function(key){
+    return crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(rec.iv)},key,unb64(rec.ct)).then(function(pt){return JSON.parse(dec.decode(pt))});
+  });
+}
+/* v1.0 kept one "user" field; v1.1 has email + username */
+function fixData(d){
+  if(!Array.isArray(d.entries))d.entries=[];
+  d.entries=d.entries.filter(function(e){return e&&typeof e.site==='string'&&typeof e.pass==='string'}).map(function(e){
+    if(e.email==null&&e.user!=null&&/@/.test(e.user)){e.email=e.user;e.user=''}
+    e.email=String(e.email||'');e.user=String(e.user||'');e.url=String(e.url||'');e.note=String(e.note||'');
+    e.id=e.id||b64(rand(9));e.created=+e.created||Date.now();e.updated=+e.updated||e.created;deriveLinks(e);return e;
+  });
+}
+/* app = Android app the Open button and Autofill use; dom = website domain Autofill matches in browsers */
+function deriveLinks(e){
+  var p=PMAP[norm(e.site)];
+  if(e.appBy!=='pick'){e.app=p&&p[1]?p[1]:'';e.appBy=e.app?'auto':'';e.appLabel=''}
+  var w=webUrl(e.url)||(p?p[2]:'');
+  e.dom='';if(w){try{e.dom=new URL(w).hostname.toLowerCase().replace(/^www\./,'')}catch(x){}}
+}
+
+/* ---------- session (only lives in memory while unlocked) ---------- */
+var S=null;
+function vaultRecord(sess){
+  return seal(sess.dkey,enc.encode(JSON.stringify(sess.data))).then(function(box){
+    var r={};Object.keys(sess.meta).forEach(function(k){r[k]=sess.meta[k]});r.data=box;return r;
+  });
+}
+function persist(){if(!S)return Promise.resolve();return vaultRecord(S).then(function(r){save(VKEY,r);mirror(r)})}
+/* the Autofill service reads an encrypted copy of the vault (never plain text) */
+function mirror(r){if(isNative&&r)NP('VaultBridge','store',{record:JSON.stringify(r)}).catch(function(){})}
+function busy(on){$('busy').classList.toggle('on',!!on)}
+
+/* ---------- native (Android) bridge ---------- */
+var cap=window.Capacitor;
+var isNative=!!(cap&&cap.isNativePlatform&&cap.isNativePlatform()&&cap.nativePromise);
+function NP(plugin,method,opts){return cap.nativePromise(plugin,method,opts||{})}
+var graceUntil=0;            // leaving the app for a share sheet / file picker / ad doesn't lock it
+function allowAway(ms){graceUntil=Date.now()+(ms||120000)}
+
+/* ---------- clipboard (auto-clears) ---------- */
+var clipTimer=null;
+function writeClip(text){
+  if(isNative)return NP('Clipboard','write',{string:text});
+  if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(text);
+  return new Promise(function(ok,bad){
+    var t=document.createElement('textarea');t.value=text;t.setAttribute('readonly','');t.style.position='fixed';t.style.opacity='0';
+    document.body.appendChild(t);t.select();var done=false;try{done=document.execCommand('copy')}catch(e){}
+    document.body.removeChild(t);done?ok():bad();
+  });
+}
+function copy(text,what,secret,msg){
+  if(!text){toast('No '+what.toLowerCase()+' saved');return Promise.resolve(false)}
+  return writeClip(text).then(function(){
+    clearTimeout(clipTimer);
+    if(secret)clipTimer=setTimeout(function(){writeClip(' ').catch(function(){})},CLIP_CLEAR_SEC*1000);
+    toast(msg||(what+' copied'+(secret?' — clears in '+CLIP_CLEAR_SEC+'s':'')),msg?4500:2600);
+    return true;
+  }).catch(function(){toast('Could not copy — try again');return false});
+}
+
+/* ---------- toast ---------- */
+var toastT=null;
+function toast(msg,ms){var t=$('toast');t.textContent=msg;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove('on')},ms||2600)}
+
+/* ---------- password strength (rough, for guidance only) ---------- */
+function strength(pw){
+  if(!pw)return 0;
+  var pool=0;if(/[a-z]/.test(pw))pool+=26;if(/[A-Z]/.test(pw))pool+=26;if(/\d/.test(pw))pool+=10;if(/[^A-Za-z0-9]/.test(pw))pool+=33;
+  var bits=pw.length*Math.log2(Math.max(pool,2));
+  if(/^(.)\1+$/.test(pw)||/^(?:password|12345678|qwerty)/i.test(pw))bits=Math.min(bits,20);
+  return bits;
+}
+function paintMeter(el,pw){
+  var b=strength(pw);el.style.width=Math.min(100,b/80*100)+'%';
+  el.style.background=b<40?'var(--red)':b<60?'var(--amber)':'var(--brand)';return b;
+}
+function checkNewPw(a,b){
+  if(a.length<8)return 'Use at least 8 characters.';
+  if(a!==b)return 'The two passwords don’t match.';
+  return '';
+}
+
+/* ---------- screens ---------- */
+function show(view){
+  ['setupView','recView','lockView','vaultView'].forEach(function(v){$(v).hidden=v!==view});
+  if(view==='vaultView')adsShow();else adsHide();
+  window.scrollTo(0,0);
+}
+function hasVault(){return validRecord(load(VKEY,null))||validV1(load(OLDKEY,null))}
+var bioOn=false,bioAvail='unsupported',autoBio=true;
+function refreshBio(){
+  if(!isNative){bioOn=false;$('uBio').hidden=true;return Promise.resolve()}
+  return NP('VaultBridge','bioStatus').then(function(r){bioAvail=r.available;bioOn=!!r.enabled}).catch(function(){bioOn=false})
+    .then(function(){$('uBio').hidden=!(bioOn&&validRecord(load(VKEY,null)))});
+}
+function boot(){
+  if(hasVault()){
+    show('lockView');checkWait();
+    refreshBio().then(function(){
+      if(bioOn&&autoBio&&!$('lockView').hidden&&load(FKEY,{until:0}).until<=Date.now())bioUnlock();
+      else setTimeout(function(){$('uPw').focus()},50);
+      autoBio=false;
+    });
+  }
+  else show('setupView');
+}
+function bioUnlock(){
+  var rec=load(VKEY,null);if(!validRecord(rec))return;
+  NP('VaultBridge','bioUnlock').then(function(r){
+    busy(true);return openWithDek(rec,unb64(r.dek));
+  }).then(function(s){
+    S=s;busy(false);save(FKEY,{n:0,until:0});$('uErr').textContent='';mirror(rec);openVault();
+  }).catch(function(e){
+    busy(false);var c=e&&e.code;
+    if(c==='INVALIDATED'){bioOn=false;$('uBio').hidden=true;$('uErr').textContent=e.message||'Fingerprints changed. Use your master password.'}
+    else if(c==='FAILED')$('uErr').textContent='Fingerprint unlock failed. Use your master password.';
+    $('uPw').focus();
+  });
+}
+function bioOff(){bioOn=false;if(isNative)NP('VaultBridge','bioDisable').catch(function(){})}
+
+/* show / hide password buttons */
+Array.prototype.forEach.call(document.querySelectorAll('[data-eye]'),function(b){
+  b.innerHTML=IC.eye;
+  b.addEventListener('click',function(){
+    var i=$(b.getAttribute('data-eye')),hid=i.type==='password';
+    i.type=hid?'text':'password';b.innerHTML=hid?IC.eyeOff:IC.eye;b.setAttribute('aria-label',hid?'Hide password':'Show password');
+  });
+});
+function resetEyes(){Array.prototype.forEach.call(document.querySelectorAll('[data-eye]'),function(b){
+  $(b.getAttribute('data-eye')).type='password';b.innerHTML=IC.eye;b.setAttribute('aria-label','Show password')})}
+
+/* ---------- setup ---------- */
+$('sPw').addEventListener('input',function(){
+  var b=paintMeter($('sMeter'),this.value);
+  $('sHint').textContent=!this.value?'At least 8 characters. Longer is stronger.':this.value.length<8?'Too short — at least 8 characters.':
+    b<40?'Weak — add more words, numbers or symbols.':b<60?'Okay — a few more characters makes it strong.':'Strong.';
+});
+$('sGo').addEventListener('click',function(){
+  var a=$('sPw').value,e=$('sErr'),m=checkNewPw(a,$('sPw2').value);
+  if(m){e.textContent=m;return}
+  e.textContent='';busy(true);
+  newSession(a,[]).then(function(s){S=s;bioOff();return persist()}).then(function(){
+    $('sPw').value=$('sPw2').value='';paintMeter($('sMeter'),'');resetEyes();busy(false);showRecovery();
+  }).catch(function(){busy(false);e.textContent='Something went wrong. Please try again.'});
+});
+$('sImport').addEventListener('click',function(){pickFile()});
+
+/* recovery code screen (after creating a vault, or after upgrading from v1.0) */
+function showRecovery(){$('recCode').textContent=S.data.recovery;$('recOk').checked=false;$('recErr').textContent='';show('recView')}
+$('recCopy').addEventListener('click',function(){copy(S&&S.data.recovery,'Recovery code',true)});
+$('recGo').addEventListener('click',function(){
+  if(!$('recOk').checked){$('recErr').textContent='Please save the code, then tick the box.';return}
+  $('recCode').textContent='';openVault();toast('Vault ready');
+});
+
+/* ---------- unlock + 30 s wait after 5 wrong tries ---------- */
+var waitTick=null;
+function checkWait(){
+  var f=load(FKEY,{n:0,until:0});clearInterval(waitTick);
+  if(f.until>Date.now()){
+    $('uGo').disabled=true;
+    var paint=function(){var l=Math.ceil((f.until-Date.now())/1000);
+      if(l<=0){clearInterval(waitTick);$('uGo').disabled=false;$('uErr').textContent='You can try again now.';return}
+      $('uErr').textContent='Too many wrong tries. Wait '+l+' s — or tap “Forgot master password?”'};
+    paint();waitTick=setInterval(paint,1000);return true;
+  }
+  $('uGo').disabled=false;return false;
+}
+function unlock(){
+  if(checkWait())return;
+  var pw=$('uPw').value;if(!pw){$('uErr').textContent='Enter your master password.';return}
+  var rec=load(VKEY,null),old=load(OLDKEY,null),p;
+  busy(true);$('uErr').textContent='';
+  if(validRecord(rec))p=openWith(rec,pw,'pw').then(function(s){S=s;return false});
+  else if(validV1(old))p=openV1(old,pw).then(function(d){fixData(d);return newSession(pw,d.entries)})   // upgrade v1.0 -> v1.1
+    .then(function(s){S=s;return persist().then(function(){drop(OLDKEY);return true})});
+  else{busy(false);boot();return}
+  p.then(function(upgraded){
+    save(FKEY,{n:0,until:0});$('uPw').value='';resetEyes();busy(false);mirror(load(VKEY,null));
+    if(upgraded)bioOff();
+    if(upgraded){showRecovery();toast('KeyVault updated — save your new recovery code',4000)}else openVault();
+  }).catch(function(){
+    busy(false);$('uPw').value='';S=null;
+    var f=load(FKEY,{n:0,until:0});f.n++;
+    if(f.n>=MAX_TRIES){f.n=0;f.until=Date.now()+WAIT_SEC*1000}
+    save(FKEY,f);
+    if(!checkWait()){var left=MAX_TRIES-f.n;$('uErr').textContent='Wrong master password.'+(left<=2?' '+left+(left===1?' try':' tries')+' left before a '+WAIT_SEC+'-second wait.':'')}
+    $('uPw').focus();
+  });
+}
+$('uGo').addEventListener('click',unlock);
+$('uBio').addEventListener('click',bioUnlock);
+$('uPw').addEventListener('keydown',function(e){if(e.key==='Enter')unlock()});
+
+/* ---------- forgot master password (recovery code) ---------- */
+$('uForgot').addEventListener('click',function(){
+  if(!validRecord(load(VKEY,null))){toast('Unlock once with your master password to finish the update first.',4000);return}
+  resetEyes();['fgCode','fgNew','fgNew2'].forEach(function(id){$(id).value=''});$('fgErr').textContent='';paintMeter($('fgMeter'),'');openSheet('fgVeil');
+});
+$('fgNew').addEventListener('input',function(){paintMeter($('fgMeter'),this.value)});
+$('fgCancel').addEventListener('click',function(){closeSheet('fgVeil')});
+$('fgGo').addEventListener('click',function(){
+  var code=$('fgCode').value,n=$('fgNew').value,e=$('fgErr'),m;
+  if(normRecovery(code).length!==24){e.textContent='The recovery code has 24 letters and numbers.';return}
+  if((m=checkNewPw(n,$('fgNew2').value))){e.textContent=m;return}
+  busy(true);
+  openWith(load(VKEY,null),code,'rec').then(function(s){S=s;return setMasterPassword(S,n)}).then(persist).then(function(){
+    save(FKEY,{n:0,until:0});clearInterval(waitTick);
+    ['fgCode','fgNew','fgNew2','uPw'].forEach(function(id){$(id).value=''});$('uErr').textContent='';
+    busy(false);closeSheet('fgVeil');openVault();toast('New master password set');
+  }).catch(function(){busy(false);S=null;e.textContent='That recovery code is not right.'});
+});
+
+function lockNow(){
+  S=null;closeAllSheets();$('list').innerHTML='';$('q').value='';revealed={};
+  ['fEmail','fUser','fPass','fNote','fSite','fUrl','cOld','cNew','cNew2','pPw','fgCode','fgNew','fgNew2'].forEach(function(id){$(id).value=''});
+  ['vEmail','vUser','vPass','vNote','rcCode','recCode'].forEach(function(id){$(id).textContent=''});
+  boot();
+}
+$('lockBtn').addEventListener('click',function(){autoBio=false;lockNow()});
+
+/* ---------- auto lock: when the app is left, and when idle ---------- */
+var hiddenAt=0,lastTouch=Date.now();
+document.addEventListener('visibilitychange',function(){
+  if(Date.now()<graceUntil){hiddenAt=0;if(!document.hidden&&S)refreshAutofill();return}   // share sheet, file picker, Settings or full-screen ad
+  if(document.hidden){hiddenAt=Date.now();if(S&&settings.lockAfter===0){autoBio=true;lockNow()}return}
+  if(S&&hiddenAt&&Date.now()-hiddenAt>=settings.lockAfter*1000){autoBio=true;lockNow()}
+  else if(!S&&!$('lockView').hidden&&hiddenAt&&bioOn&&stack.length===0){autoBio=true;boot()}
+  hiddenAt=0;
+  if(S)refreshAutofill();
+});
+['pointerdown','keydown'].forEach(function(ev){document.addEventListener(ev,function(){lastTouch=Date.now()},true)});
+setInterval(function(){if(S&&Date.now()-lastTouch>IDLE_LOCK_SEC*1000)lockNow()},5000);
+
+/* ---------- vault list: grouped by platform ---------- */
+var COLORS=['#0E7A62','#2A64C4','#8A4FD1','#C2372D','#B5651D','#227A8F','#A23B72','#4D7A1F'];
+var BRAND={gmail:'#D93025',facebook:'#1877F2',messenger:'#0084FF',instagram:'#C13584',tiktok:'#111111','x (twitter)':'#111111',
+  youtube:'#E00000',whatsapp:'#1DA851',telegram:'#229ED9',gcash:'#0070E0',maya:'#00A651',lazada:'#0F146D',shopee:'#EE4D2D',
+  netflix:'#B20710',spotify:'#1AA34A',linkedin:'#0A66C2',outlook:'#0F6CBD',paypal:'#003087'};
+function colorFor(s){var k=norm(s),p=PMAP[k];if(p&&BRAND[norm(p[0])])return BRAND[norm(p[0])];
+  var h=2166136261;for(var i=0;i<k.length;i++){h^=k.charCodeAt(i);h=Math.imul(h,16777619)>>>0}h=(h^(h>>>13))>>>0;return COLORS[h%COLORS.length]}
+function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtDate(t){var d=new Date(t);return ('0'+d.getDate()).slice(-2)+'-'+MON[d.getMonth()]+'-'+d.getFullYear()}
+function ymd(){var d=new Date();return d.getFullYear()+('0'+(d.getMonth()+1)).slice(-2)+('0'+d.getDate()).slice(-2)}
+function openVault(){show('vaultView');render();refreshAutofill()}
+function groups(list){
+  var g={},order=[];
+  list.forEach(function(e){var k=norm(e.site);if(!g[k]){g[k]={name:e.site.trim(),items:[]};order.push(k)}g[k].items.push(e)});
+  order.sort(function(a,b){return g[a].name.localeCompare(g[b].name,undefined,{sensitivity:'base'})});
+  return order.map(function(k){g[k].items.sort(function(a,b){return a.created-b.created});return g[k]});
+}
+var revealed={},revealT={};
+function render(){
+  if(!S)return;
+  var all=S.data.entries,q=norm($('q').value);
+  var rows=q?all.filter(function(e){return norm(e.site+' '+e.email+' '+e.user+' '+e.url).indexOf(q)>=0}):all;
+  var gs=groups(rows),plats=groups(all).length;
+  $('count').textContent=all.length+(all.length===1?' password':' passwords')+' · '+plats+(plats===1?' platform':' platforms');
+  var box=$('list');box.innerHTML='';
+  gs.forEach(function(g){
+    var h=el('h2','gname');h.appendChild(document.createTextNode(g.name+' '));
+    h.appendChild(el('small',null,'\u00b7 '+g.items.length+(g.items.length===1?' account':' accounts')));box.appendChild(h);
+    var ul=el('ul');ul.style.cssText='list-style:none;margin:0;padding:0';
+    g.items.forEach(function(e){
+      var li=el('li','item');
+      var ava=el('div','ava',(g.name[0]||'?').toUpperCase());ava.style.background=colorFor(g.name);ava.setAttribute('aria-hidden','true');
+      var who=el('button','who');who.setAttribute('aria-label','Details for '+e.site+' '+(e.email||e.user));
+      who.appendChild(el('b',null,e.email||('@'+e.user)));
+      if(e.email&&e.user)who.appendChild(el('span',null,'@'+e.user));
+      who.appendChild(el('span','pw mono',revealed[e.id]?e.pass:MASK));
+      who.addEventListener('click',function(){openView(e.id)});
+      var eye=el('button','sq');eye.innerHTML=revealed[e.id]?IC.eyeOff:IC.eye;eye.setAttribute('aria-label',(revealed[e.id]?'Hide':'Show')+' password for '+e.site);
+      eye.addEventListener('click',function(){toggleReveal(e.id)});
+      var cp=el('button','sq pw');cp.innerHTML=IC.copy;cp.setAttribute('aria-label','Copy password for '+e.site);
+      cp.addEventListener('click',function(){copy(e.pass,'Password',true)});
+      var op=el('button','sq go');op.innerHTML=IC.open;op.setAttribute('aria-label','Open '+e.site);
+      op.addEventListener('click',function(){openPlatform(e)});
+      li.appendChild(ava);li.appendChild(who);li.appendChild(eye);li.appendChild(cp);li.appendChild(op);ul.appendChild(li);
+    });
+    box.appendChild(ul);
+  });
+  var em=$('empty');
+  if(!all.length){em.hidden=false;em.innerHTML='<b>Your vault is empty</b>Tap <i>Add password</i> to save your first one, or <i>Import keys</i> to bring back a backup.'}
+  else if(!rows.length){em.hidden=false;em.innerHTML='';em.appendChild(el('b',null,'Nothing matches “'+$('q').value.trim()+'”'))}
+  else em.hidden=true;
+}
+function toggleReveal(id){
+  revealed[id]=!revealed[id];clearTimeout(revealT[id]);
+  if(revealed[id])revealT[id]=setTimeout(function(){if(revealed[id]){revealed[id]=false;render()}},REVEAL_SEC*1000);
+  render();
+}
+$('q').addEventListener('input',render);
+function find(id){if(!S)return null;for(var i=0;i<S.data.entries.length;i++)if(S.data.entries[i].id===id)return S.data.entries[i];return null}
+
+/* ---------- Open: copy the password, then open the platform's app (or website) ---------- */
+function webUrl(u){u=String(u||'').trim();if(!u)return '';if(!/^https?:\/\//i.test(u))u='https://'+u;return /^https?:\/\/[^\s/$.?#][^\s]*$/i.test(u)?u:''}
+/* Open: the linked app if it's on the phone -> the website -> the message "install the app or add the website" */
+function openPlatform(e){
+  var p=PMAP[norm(e.site)],pkg=e.app||(p?p[1]:''),web=webUrl(e.url)||(p?p[2]:'');
+  var login=e.email||e.user;
+  var go=function(target){
+    copy(e.pass,'Password',true,'Password copied. In '+e.site+', long-press the password box → Paste.'+(login?' Login: '+login:'')).then(function(ok){
+      if(ok)setTimeout(function(){launch(target)},900);
+    });
+  };
+  if(isNative&&pkg){
+    NP('VaultBridge','isInstalled',{pkg:pkg}).then(function(r){return !!(r&&r.installed)},function(){return false})
+      .then(function(installed){if(installed)go(pkg);else if(web)go(web);else cantOpen(e)});
+  }else if(web)go(web);
+  else cantOpen(e);
+}
+function launch(target){
+  if(isNative){
+    NP('AppLauncher','openUrl',{url:target}).then(function(r){if(!r||!r.completed)toast('Could not open it on this phone.')})
+      .catch(function(){toast('Could not open it on this phone.')});
+  }else window.open(target,'_blank','noopener');
+}
+var cantId=null;
+function cantOpen(e){
+  cantId=e.id;
+  $('ctTitle').textContent='Can’t open '+e.site;
+  $('ctText').textContent='The '+e.site+' app isn’t on this phone and no website is saved. Install the app, or add its website.';
+  openSheet('cantVeil');
+}
+$('ctStore').addEventListener('click',function(){
+  var e=find(cantId);closeSheet('cantVeil');if(!e)return;
+  var q=encodeURIComponent(e.site),web='https://play.google.com/store/search?q='+q+'&c=apps';
+  if(isNative){NP('AppLauncher','openUrl',{url:'market://search?q='+q+'&c=apps'})
+    .then(function(r){if(!r||!r.completed)return NP('AppLauncher','openUrl',{url:web})}).catch(function(){toast('Could not open the Play Store.')})}
+  else window.open(web,'_blank','noopener');
+});
+$('ctWeb').addEventListener('click',function(){
+  var id=cantId;closeSheet('cantVeil');openForm(id);setTimeout(function(){$('fUrl').focus();$('fUrl').scrollIntoView({block:'center'})},120);
+});
+$('ctNo').addEventListener('click',function(){closeSheet('cantVeil')});
+
+/* ---------- sheets ---------- */
+var stack=[];
+function openSheet(id){$(id).classList.add('on');if(stack.indexOf(id)<0)stack.push(id);adsHide()}
+function closeSheet(id){$(id).classList.remove('on');stack=stack.filter(function(s){return s!==id});if(!stack.length)adsShow()}
+function closeAllSheets(){stack.slice().forEach(closeSheet)}
+Array.prototype.forEach.call(document.querySelectorAll('.veil'),function(v){
+  v.addEventListener('click',function(e){if(e.target===v)closeSheet(v.id)});
+});
+
+/* view */
+var viewId=null,shown=false;
+function openView(id){
+  var e=find(id);if(!e)return;viewId=id;shown=false;
+  $('vSite').textContent=e.site;$('vEmail').textContent=e.email||'—';$('vUser').textContent=e.user||'—';
+  $('vPass').textContent=MASK;$('vShow').innerHTML=IC.eye;
+  $('vUrlRow').hidden=!e.url;$('vUrl').textContent=e.url||'';
+  $('vNoteRow').hidden=!e.note;$('vNote').textContent=e.note||'';
+  $('vWhen').textContent=fmtDate(e.created)+(e.updated>e.created+60000?' (changed '+fmtDate(e.updated)+')':'');
+  $('vOpen').innerHTML=IC.open+'<span></span>';$('vOpen').lastChild.textContent='Open '+e.site;
+  openSheet('viewVeil');
+}
+$('vCopyEmail').innerHTML=$('vCopyUser').innerHTML=$('vCopyPass').innerHTML=IC.copy;
+$('vCopyEmail').addEventListener('click',function(){var e=find(viewId);if(e)copy(e.email,'Email',false)});
+$('vCopyUser').addEventListener('click',function(){var e=find(viewId);if(e)copy(e.user,'Username',false)});
+$('vCopyPass').addEventListener('click',function(){var e=find(viewId);if(e)copy(e.pass,'Password',true)});
+$('vShow').addEventListener('click',function(){
+  var e=find(viewId);if(!e)return;shown=!shown;
+  $('vPass').textContent=shown?e.pass:MASK;this.innerHTML=shown?IC.eyeOff:IC.eye;this.setAttribute('aria-label',shown?'Hide password':'Show password');
+});
+$('vOpen').addEventListener('click',function(){var e=find(viewId);if(e){closeSheet('viewVeil');openPlatform(e)}});
+$('vClose').addEventListener('click',function(){closeSheet('viewVeil')});
+$('vEdit').addEventListener('click',function(){closeSheet('viewVeil');openForm(viewId)});
+
+/* add / edit */
+var editId=null,newSaves=0,formApp=null,appsCache=null;
+/* "Choose from my apps": link an installed app to the platform (Open + Autofill use it) */
+function paintChip(){
+  $('fChip').hidden=!formApp;
+  if(!formApp)return;
+  $('fChipTxt').textContent='Opens the '+formApp.label+' app';
+  if(formApp.icon){$('fChipIcon').src=formApp.icon;$('fChipIcon').hidden=false}else $('fChipIcon').hidden=true;
+}
+$('fChipX').addEventListener('click',function(){formApp=null;paintChip()});
+$('fPick').addEventListener('click',function(){
+  $('appsQ').value='';$('appsList').innerHTML='';$('appsHint').textContent='Loading your apps…';openSheet('appsVeil');
+  (appsCache?Promise.resolve(appsCache):NP('VaultBridge','listApps').then(function(r){appsCache=r.apps||[];return appsCache}))
+    .then(function(){$('appsHint').textContent='Not on this phone? Close this, type the name in Platform and add the website.';paintApps()})
+    .catch(function(){$('appsHint').textContent='Could not load your apps. Type the name in Platform instead.'});
+});
+function paintApps(){
+  var q=norm($('appsQ').value),ul=$('appsList');ul.innerHTML='';
+  (appsCache||[]).filter(function(a){return !q||norm(a.label).indexOf(q)>=0}).slice(0,300).forEach(function(a){
+    var li=el('li'),b=el('button');
+    if(a.icon){var im=document.createElement('img');im.src=a.icon;im.alt='';b.appendChild(im)}else b.appendChild(el('i','noimg'));
+    b.appendChild(el('span',null,a.label));
+    b.addEventListener('click',function(){
+      formApp={pkg:a.pkg,label:a.label,icon:a.icon||''};$('fSite').value=a.label;paintChip();closeSheet('appsVeil');
+      setTimeout(function(){$('fEmail').focus()},60);
+    });
+    li.appendChild(b);ul.appendChild(li);
+  });
+  if(!ul.children.length)ul.appendChild(el('li','hint','No app called “'+$('appsQ').value.trim()+'” on this phone.'));
+}
+$('appsQ').addEventListener('input',paintApps);
+$('appsClose').addEventListener('click',function(){closeSheet('appsVeil')});
+
+function fillPlatList(){
+  var dl=$('platList'),seen={};dl.innerHTML='';
+  groups(S.data.entries).map(function(g){return g.name}).concat(PLATFORMS.map(function(p){return p[0]})).forEach(function(n){
+    if(seen[norm(n)])return;seen[norm(n)]=1;var o=document.createElement('option');o.value=n;dl.appendChild(o);
+  });
+}
+function openForm(id){
+  var e=id?find(id):null;editId=e?e.id:null;resetEyes();fillPlatList();
+  $('fTitle').textContent=e?'Edit password':'Add password';
+  $('fSite').value=e?e.site:'';$('fEmail').value=e?e.email:'';$('fUser').value=e?e.user:'';$('fPass').value=e?e.pass:'';
+  $('fUrl').value=e?e.url:'';$('fNote').value=e?e.note:'';$('fErr').textContent='';
+  $('fPick').hidden=!isNative;
+  formApp=e&&e.appBy==='pick'&&e.app?{pkg:e.app,label:e.appLabel||e.site,icon:''}:null;
+  if(formApp&&appsCache)appsCache.some(function(a){if(a.pkg===formApp.pkg){formApp.icon=a.icon||'';return true}});
+  paintChip();
+  $('fDelete').hidden=!e;openSheet('formVeil');setTimeout(function(){if(!e)$('fSite').focus()},60);
+}
+$('addBtn').addEventListener('click',function(){openForm(null)});
+$('fCancel').addEventListener('click',function(){closeSheet('formVeil')});
+$('fSave').addEventListener('click',function(){
+  if(!S)return;
+  var site=$('fSite').value.trim().replace(/\s+/g,' '),email=$('fEmail').value.trim(),user=$('fUser').value.trim().replace(/^@/,''),pass=$('fPass').value;
+  if(!site){$('fErr').textContent='Type the platform (Gmail, Facebook…).';return}
+  if(!email&&!user){$('fErr').textContent='Type the email address or the username.';return}
+  if(!pass){$('fErr').textContent='Type or generate a password.';return}
+  /* same platform = same group: reuse the spelling already in the vault, or the known name */
+  var k=norm(site),same=S.data.entries.filter(function(x){return norm(x.site)===k&&x.id!==editId})[0];
+  if(same)site=same.site;else if(PMAP[k])site=PMAP[k][0];
+  /* picked an app for this platform: link it, and link the other accounts of the same platform too */
+  var pick=formApp?{pkg:formApp.pkg,label:formApp.label}:null;
+  if(!pick&&same&&same.appBy==='pick')pick={pkg:same.app,label:same.appLabel};
+  var dup=S.data.entries.filter(function(x){return x.id!==editId&&norm(x.site)===norm(site)&&norm(x.email)===norm(email)&&norm(x.user)===norm(user)})[0];
+  if(dup){$('fErr').textContent='This '+site+' account is already saved. Open it and tap Edit to change it.';return}
+  var now=Date.now(),isNew=!editId,e=editId?find(editId):null;
+  if(!e){e={id:b64(rand(9)),created:now};S.data.entries.push(e)}
+  e.site=site;e.email=email;e.user=user;e.pass=pass;e.url=$('fUrl').value.trim();e.note=$('fNote').value;e.updated=now;
+  if(pick){e.app=pick.pkg;e.appBy='pick';e.appLabel=pick.label||site}else if(e.appBy==='pick'){e.appBy='';e.app='';e.appLabel=''}
+  deriveLinks(e);
+  if(pick)S.data.entries.forEach(function(x){if(norm(x.site)===norm(site)&&x.appBy!=='pick'){x.app=pick.pkg;x.appBy='pick';x.appLabel=pick.label||site}});
+  busy(true);
+  persist().then(function(){busy(false);closeSheet('formVeil');render();toast(isNew?'Saved under '+site:'Updated');if(isNew)afterNewSave()})
+    .catch(function(){busy(false);$('fErr').textContent='Could not save. Please try again.'});
+});
+$('fDelete').addEventListener('click',function(){
+  var e=find(editId);if(!e)return;
+  ask('Delete this '+e.site+' account?',(e.email||e.user)+' will be removed from your vault for good.','Delete',function(){
+    S.data.entries=S.data.entries.filter(function(x){return x.id!==e.id});
+    persist().then(function(){closeSheet('formVeil');render();toast('Deleted')});
+  });
+});
+
+/* confirm */
+var askCb=null;
+function ask(title,text,yes,cb){$('aTitle').textContent=title;$('aText').textContent=text;$('aYes').textContent=yes;askCb=cb;openSheet('askVeil')}
+$('aNo').addEventListener('click',function(){askCb=null;closeSheet('askVeil')});
+$('aYes').addEventListener('click',function(){var cb=askCb;askCb=null;closeSheet('askVeil');if(cb)cb()});
+
+/* ask for a password, then run cb(pw) -> Promise; a rejected promise shows errText */
+var pwCb=null,pwErr='';
+function askPw(title,info,label,errText,cb){
+  $('pTitle').textContent=title;$('pInfo').textContent=info;$('pLabel').textContent=label;$('pErr').textContent='';$('pPw').value='';
+  pwCb=cb;pwErr=errText;resetEyes();openSheet('pwVeil');setTimeout(function(){$('pPw').focus()},60);
+}
+function pwGo(){
+  var v=$('pPw').value;if(!v){$('pErr').textContent='Type the password.';return}
+  busy(true);
+  Promise.resolve().then(function(){return pwCb(v)}).then(function(){busy(false);$('pPw').value='';closeSheet('pwVeil')})
+    .catch(function(){busy(false);$('pErr').textContent=pwErr});
+}
+$('pGo').addEventListener('click',pwGo);
+$('pPw').addEventListener('keydown',function(e){if(e.key==='Enter')pwGo()});
+$('pCancel').addEventListener('click',function(){$('pPw').value='';closeSheet('pwVeil')});
+
+/* ---------- password generator ---------- */
+var SETS={up:'ABCDEFGHJKLMNPQRSTUVWXYZ',lo:'abcdefghijkmnopqrstuvwxyz',num:'23456789',sym:'!@#$%^&*-_=+?'};
+function pickIndex(n){var max=Math.floor(4294967296/n)*n,u=new Uint32Array(1);do{crypto.getRandomValues(u)}while(u[0]>=max);return u[0]%n}
+function pick(chars){return chars[pickIndex(chars.length)]}
+function generate(len,o){
+  var sets=[];if(o.up)sets.push(SETS.up);if(o.lo)sets.push(SETS.lo);if(o.num)sets.push(SETS.num);if(o.sym)sets.push(SETS.sym);
+  if(!sets.length)sets=[SETS.lo];
+  var all=sets.join(''),out=sets.map(pick);
+  while(out.length<len)out.push(pick(all));
+  for(var i=out.length-1;i>0;i--){var j=pickIndex(i+1),t=out[i];out[i]=out[j];out[j]=t}
+  return out.join('');
+}
+var genFor=null;
+function genOpts(){return {up:$('gUp').checked,lo:$('gLo').checked,num:$('gNum').checked,sym:$('gSym').checked}}
+function regen(){$('gLenTxt').textContent=$('gLen').value;$('gOut').textContent=generate(+$('gLen').value,genOpts())}
+function openGen(forForm){genFor=forForm?'form':null;$('gUse').textContent=forForm?'Use this':'Copy';regen();openSheet('genVeil')}
+['gLen','gUp','gLo','gNum','gSym'].forEach(function(id){$(id).addEventListener('input',regen)});
+$('gNew').addEventListener('click',regen);
+$('gClose').addEventListener('click',function(){closeSheet('genVeil')});
+$('gUse').addEventListener('click',function(){
+  var p=$('gOut').textContent;
+  if(genFor==='form'){$('fPass').value=p;$('fPass').type='text';closeSheet('genVeil');toast('Strong password added')}
+  else copy(p,'Password',true);
+});
+$('fGen').addEventListener('click',function(){openGen(true)});
+
+/* ---------- settings ---------- */
+$('menuBtn').addEventListener('click',function(){
+  $('mLock').value=String(settings.lockAfter);paintMenu();openSheet('menuVeil');
+  refreshBio().then(paintMenu);refreshAutofill().then(paintMenu);
+});
+/* ---------- fingerprint + Autofill settings ---------- */
+var afSupported=false,afOn=false;
+function refreshAutofill(){
+  if(!isNative)return Promise.resolve();
+  return NP('VaultBridge','autofillStatus').then(function(r){afSupported=!!r.supported;afOn=!!r.enabled}).catch(function(){afSupported=false})
+    .then(paintTip);
+}
+function paintTip(){$('afTip').hidden=!(S&&afSupported&&!afOn&&!settings.afTipHidden)}
+function paintMenu(){
+  $('mBio').hidden=!(isNative&&(bioAvail!=='unsupported'||bioOn));
+  $('mBioState').textContent=bioOn?'On':bioAvail==='none'?'Add a fingerprint in phone Settings':'Off';
+  $('mAf').hidden=!(isNative&&afSupported);
+  $('mAfState').textContent=afOn?'On':'Off';
+}
+$('mBio').addEventListener('click',function(){
+  if(bioOn){
+    ask('Turn off fingerprint unlock?','You will unlock KeyVault with your master password only.','Turn off',function(){bioOff();paintMenu();toast('Fingerprint unlock is off')});
+    return;
+  }
+  if(bioAvail==='none'){toast('Add a fingerprint in your phone Settings first.',3500);return}
+  closeSheet('menuVeil');
+  askPw('Turn on fingerprint unlock','Type your master password once to confirm. After that, your fingerprint opens KeyVault and fills logins in other apps.','Master password','Wrong master password.',function(pw){
+    return openWith(load(VKEY,null),pw,'pw').then(function(){
+      NP('VaultBridge','bioEnable',{dek:b64(S.dek)}).then(function(){bioOn=true;toast('Fingerprint unlock is on')},
+        function(e){toast(e&&e.code==='CANCELLED'?'Fingerprint unlock not turned on':'Could not turn on fingerprint unlock',3000)});
+    });
+  });
+});
+function openAf(){allowAway();NP('VaultBridge','openAutofillSettings').catch(function(){toast('Open phone Settings → Passwords → Autofill service → KeyVault',4500)})}
+$('mAf').addEventListener('click',function(){
+  closeSheet('menuVeil');
+  if(afOn)toast('Autofill is on. To turn it off, pick another service in phone Settings.',4000);
+  openAf();
+});
+$('afOn').addEventListener('click',openAf);
+$('afLater').addEventListener('click',function(){settings.afTipHidden=true;save(SKEY,settings);paintTip()});
+
+$('mClose').addEventListener('click',function(){closeSheet('menuVeil')});
+$('mLock').addEventListener('change',function(){settings.lockAfter=+this.value;save(SKEY,settings);toast('Saved')});
+$('mGen').addEventListener('click',function(){closeSheet('menuVeil');openGen(false)});
+
+$('mChange').addEventListener('click',function(){closeSheet('menuVeil');resetEyes();$('cErr').textContent='';paintMeter($('cMeter'),'');openSheet('chgVeil')});
+$('cNew').addEventListener('input',function(){paintMeter($('cMeter'),this.value)});
+$('cCancel').addEventListener('click',function(){$('cOld').value=$('cNew').value=$('cNew2').value='';closeSheet('chgVeil')});
+$('cGo').addEventListener('click',function(){
+  var o=$('cOld').value,n=$('cNew').value,e=$('cErr'),m=checkNewPw(n,$('cNew2').value);
+  if(m){e.textContent=m;return}
+  busy(true);
+  openWith(load(VKEY,null),o,'pw').then(function(){return setMasterPassword(S,n)}).then(persist).then(function(){
+    busy(false);$('cOld').value=$('cNew').value=$('cNew2').value='';closeSheet('chgVeil');
+    toast('Master password changed. Tap Download to make a new backup.',3500);
+  }).catch(function(){busy(false);e.textContent='Current master password is wrong.'});
+});
+
+$('mRec').addEventListener('click',function(){
+  closeSheet('menuVeil');
+  askPw('Show recovery code','For your safety, type your master password first.','Master password','Wrong master password.',function(pw){
+    return openWith(load(VKEY,null),pw,'pw').then(function(){$('rcCode').textContent=S.data.recovery;setTimeout(function(){openSheet('rcVeil')},0)});
+  });
+});
+$('rcCopy').addEventListener('click',function(){copy(S&&S.data.recovery,'Recovery code',true)});
+$('rcClose').addEventListener('click',function(){$('rcCode').textContent='';closeSheet('rcVeil')});
+
+$('mWipe').addEventListener('click',function(){
+  closeSheet('menuVeil');
+  ask('Delete everything?','All saved passwords and your master password are erased from this phone. This cannot be undone. Tap Download first if you might need them.','Delete all',function(){
+    drop(VKEY);drop(OLDKEY);drop(FKEY);if(isNative)NP('VaultBridge','clear').catch(function(){});bioOn=false;S=null;closeAllSheets();$('list').innerHTML='';boot();toast('All data deleted');
+  });
+});
+
+/* ---------- backup file: Download / Upload to Google Drive / Import keys ----------
+   The .kvault file holds the ENCRYPTED vault only. It opens with that vault's master password. */
+function backupFile(){
+  return vaultRecord(S).then(function(rec){
+    return {name:'KeyVault-backup-'+ymd()+'.kvault',
+      text:JSON.stringify({app:'KeyVault',kind:'backup',appVersion:APP_VERSION,exported:new Date().toISOString(),count:S.data.entries.length,vault:rec})};
+  });
+}
+function webDownload(f){
+  var a=document.createElement('a'),u=URL.createObjectURL(new Blob([f.text],{type:'application/octet-stream'}));
+  a.href=u;a.download=f.name;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(u)},4000);
+}
+function shareFile(f,dialogTitle){
+  allowAway();
+  return NP('Filesystem','writeFile',{path:f.name,data:f.text,directory:'CACHE',encoding:'utf8'}).then(function(r){
+    return NP('Share','share',{title:'KeyVault backup',dialogTitle:dialogTitle,files:[r.uri]});
+  });
+}
+$('tDown').addEventListener('click',function(){
+  if(!S)return;busy(true);
+  backupFile().then(function(f){
+    if(!isNative){webDownload(f);busy(false);toast('Downloaded '+f.name);return}
+    return NP('Filesystem','writeFile',{path:'KeyVault/'+f.name,data:f.text,directory:'DOCUMENTS',encoding:'utf8',recursive:true})
+      .then(function(){busy(false);toast('Saved to Documents/KeyVault/'+f.name,4000)})
+      .catch(function(){busy(false);toast('Choose where to save the backup',3000);return shareFile(f,'Save KeyVault backup')});
+  }).catch(function(){busy(false);toast('Could not save the backup. Try again.')});
+});
+$('tDrive').addEventListener('click',function(){
+  if(!S)return;busy(true);
+  backupFile().then(function(f){
+    busy(false);
+    if(isNative){toast('Pick “Drive” in the list',3000);return shareFile(f,'Upload to Google Drive')}
+    var file=typeof File==='function'?new File([f.text],f.name,{type:'application/octet-stream'}):null;
+    if(file&&navigator.canShare&&navigator.canShare({files:[file]})){allowAway();return navigator.share({files:[file],title:'KeyVault backup'})}
+    webDownload(f);allowAway();window.open('https://drive.google.com/drive/my-drive','_blank','noopener');
+    toast('File downloaded — drag it into Google Drive',4000);
+  }).catch(function(){busy(false)});
+});
+$('tImport').addEventListener('click',function(){pickFile()});
+function pickFile(){allowAway(300000);$('fileIn').value='';$('fileIn').click()}
+$('fileIn').addEventListener('change',function(){
+  var file=this.files&&this.files[0];if(!file)return;
+  if(file.size>20*1024*1024){toast('That file is too big to be a KeyVault backup.');return}
+  var rd=new FileReader();
+  rd.onload=function(){
+    var rec=null;try{var j=JSON.parse(String(rd.result));rec=j&&j.app==='KeyVault'&&j.vault?j.vault:j}catch(x){}
+    if(!validRecord(rec)){toast('That file is not a KeyVault backup.',3500);return}
+    importRecord(rec);
+  };
+  rd.onerror=function(){toast('Could not read that file.')};
+  rd.readAsText(file);
+});
+function importRecord(rec){
+  var fresh=!S;
+  askPw('Import keys',fresh?'Type the master password that was used when this backup was made. Your vault on this phone will use it.':
+      'Passwords from the backup are added to this vault. Nothing here is deleted.',
+    'Master password of the backup','Wrong master password for that backup.',function(pw){
+    return openWith(rec,pw,'pw').then(function(r){
+      if(fresh){
+        S=r;bioOff();return persist().then(function(){save(FKEY,{n:0,until:0});openVault();toast('Imported '+S.data.entries.length+' passwords')});
+      }
+      var key=function(x){return norm(x.site)+'\u0001'+norm(x.email)+'\u0001'+norm(x.user)},have={},added=0,updated=0;
+      S.data.entries.forEach(function(x){have[key(x)]=x});
+      r.data.entries.forEach(function(x){
+        var cur=have[key(x)];
+        if(!cur){var n={};Object.keys(x).forEach(function(k){n[k]=x[k]});n.id=b64(rand(9));S.data.entries.push(n);have[key(n)]=n;added++}
+        else if(cur.pass!==x.pass&&x.updated>cur.updated){cur.pass=x.pass;cur.updated=x.updated;updated++}
+      });
+      return persist().then(function(){render();toast(added||updated?'Imported: '+added+' new'+(updated?', '+updated+' updated':''):'Nothing new — you already have all of them',3500)});
+    });
+  });
+}
+
+/* ---------- ads (Google AdMob) ----------
+   ADS_TEST=true shows Google's sample ads only — safe for testing, earns nothing.
+   Leave this as true here. The GitHub build switches it to false automatically
+   ONLY in the Play Store file (.aab). Ads never show on the lock screens.
+   Never tap your own real ads. */
+var ADS_TEST=true;
+var AD_BANNER='ca-app-pub-1108774748467505/2449771532';        // KeyVault Banner
+var AD_INTERSTITIAL='ca-app-pub-1108774748467505/3036754030';  // KeyVault Interstitial
+var INTERSTITIAL_EVERY=3;            // full-screen ad after every 3rd NEW password saved (never on copy or open)
+function AD(method,opts){return NP('AdMob',method,opts)}
+var adsOn=false,bannerUp=false,bannerHidden=true,interReady=false;
+function startAds(){
+  if(!isNative)return;
+  AD('initialize',{initializeForTesting:ADS_TEST})
+    .then(function(){return AD('requestConsentInfo',{}).then(function(c){
+      if(c&&c.status==='REQUIRED'&&c.isConsentFormAvailable){allowAway();return AD('showConsentForm',{})}
+    }).catch(function(){})})
+    .then(function(){adsOn=true;adsShow();prepInter()})
+    .catch(function(){});
+}
+function adsShow(){
+  if(!adsOn||!S||stack.length||$('vaultView').hidden)return;
+  if(bannerUp){if(bannerHidden)AD('resumeBanner').then(function(){bannerHidden=false;document.body.classList.add('ad')}).catch(function(){});return}
+  AD('showBanner',{adId:AD_BANNER,adSize:'BANNER',position:'BOTTOM_CENTER',margin:0,isTesting:ADS_TEST})
+    .then(function(){bannerUp=true;bannerHidden=false;document.body.classList.add('ad')}).catch(function(){});
+}
+function adsHide(){
+  if(!bannerUp||bannerHidden)return;
+  bannerHidden=true;document.body.classList.remove('ad');AD('hideBanner').catch(function(){});
+}
+function prepInter(){
+  if(!adsOn||interReady)return;
+  AD('prepareInterstitial',{adId:AD_INTERSTITIAL,isTesting:ADS_TEST}).then(function(){interReady=true}).catch(function(){interReady=false});
+}
+function afterNewSave(){
+  newSaves++;
+  if(!adsOn||newSaves<INTERSTITIAL_EVERY||!interReady)return;
+  newSaves=0;interReady=false;allowAway();
+  AD('showInterstitial').catch(function(){}).then(function(){graceUntil=0;lastTouch=Date.now();setTimeout(prepInter,1000)});
+}
+
+/* ---------- Android back button: close the top sheet first ---------- */
+if(isNative&&typeof cap.nativeCallback==='function'){
+  try{cap.nativeCallback('App','addListener',{eventName:'backButton'},function(){
+    if(stack.length){closeSheet(stack[stack.length-1]);return}
+    NP('App','minimizeApp').catch(function(){});
+  })}catch(e){}
+}
+
+if(!(window.crypto&&crypto.subtle)){
+  document.body.innerHTML='<p style="padding:24px">This device is missing secure encryption support, so KeyVault cannot run safely.</p>';
+  return;
+}
+boot();startAds();
+})();
+</script>
+</body>
+</html>
