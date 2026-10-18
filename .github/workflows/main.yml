@@ -1,0 +1,94 @@
+name: Build KeyVault APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Every run makes:
+#   1) keyvault-TEST-apk      -> install on your phone, shows TEST ads only (safe)
+#   2) keyvault-PLAYSTORE-aab -> upload to Google Play Console, shows REAL ads
+#      (only when the signing key secrets are added in GitHub Settings)
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+      HAS_KEY: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.KEYSTORE_PASSWORD != '' && secrets.KEY_ALIAS != '' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install packages
+        run: npm install
+
+      - name: Safety check (source must keep test ads)
+        run: |
+          grep -q "var ADS_TEST=true;" index.html || { echo "::error::index.html must keep var ADS_TEST=true; (the build switches it off only for the Play Store file)"; exit 1; }
+
+      - name: Create Android project
+        run: |
+          VERSION_NAME=$(node -p "require('./package.json').version")
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          mkdir -p www
+          sed "s/__APP_VERSION__/$VERSION_NAME/" index.html > www/index.html
+          npx cap add android
+          VERSION_NAME=$VERSION_NAME node setup-android.js
+          npx cap sync android
+
+      - name: Build TEST APK (test ads)
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+          mkdir -p ../out
+          cp app/build/outputs/apk/debug/app-debug.apk "../out/keyvault-v${VERSION_NAME}-${VERSION_CODE}-TEST.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: keyvault-TEST-apk
+          path: out/*-TEST.apk
+
+      - name: Signing key missing
+        if: env.HAS_KEY != 'true'
+        run: echo "::warning::No signing key secrets yet, so only the TEST APK was built. Add KEYSTORE_BASE64, KEYSTORE_PASSWORD and KEY_ALIAS in Settings > Secrets and variables > Actions."
+
+      - name: Real AdMob IDs check
+        if: env.HAS_KEY == 'true'
+        run: |
+          if grep -q "3940256099942544" index.html setup-android.js; then
+            echo "::error::Google's sample AdMob IDs are still in index.html or setup-android.js. Put your own KeyVault App ID and ad unit IDs before building the Play Store file."
+            exit 1
+          fi
+
+      - name: Build PLAY STORE bundle (real ads, signed)
+        if: env.HAS_KEY == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          sed -i "s/var ADS_TEST=true;/var ADS_TEST=false;/" www/index.html
+          grep -q "var ADS_TEST=false;" www/index.html || { echo "::error::could not switch to real ads"; exit 1; }
+          npx cap copy android
+          cd android
+          ./gradlew bundleRelease
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.keystore"
+          AAB="../out/keyvault-v${VERSION_NAME}-${VERSION_CODE}-PLAYSTORE.aab"
+          cp app/build/outputs/bundle/release/app-release.aab "$AAB"
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore "$RUNNER_TEMP/upload.keystore" -storepass "$KEYSTORE_PASSWORD" \
+            "$AAB" "$KEY_ALIAS"
+          jarsigner -verify "$AAB"
+          rm -f "$RUNNER_TEMP/upload.keystore"
+
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          name: keyvault-PLAYSTORE-aab
+          path: out/*-PLAYSTORE.aab
